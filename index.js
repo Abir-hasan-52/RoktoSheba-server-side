@@ -31,6 +31,7 @@ async function run() {
     // collection
     const db = client.db("roktoSheba");
     const usersCollection = db.collection("users");
+    const donationCollection = db.collection("donations");
 
     // Register new user
     app.post("/users", async (req, res) => {
@@ -43,6 +44,39 @@ async function run() {
       const user = req.body;
       const result = await usersCollection.insertOne(user);
       res.send(result);
+    });
+
+    // route: GET /users/:email
+    app.get("/users/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+
+        const user = await db.collection("users").findOne({ email });
+
+        if (user) {
+          res.send(user);
+        } else {
+          res.status(404).json({ message: "User not found" });
+        }
+      } catch (error) {
+        console.error("Error fetching user:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+      }
+    });
+
+    // donation data store
+
+    // route: POST /createDonation
+    // POST /createDonation
+    app.post("/createDonation", async (req, res) => {
+      try {
+        const donationData = req.body;
+        const result = await  donationCollection.insertOne(donationData);
+        res.send(result);
+      } catch (error) {
+        console.error("Error creating donation:", error);
+        res.status(500).json({ message: "Failed to create donation" });
+      }
     });
 
     // Send a ping to confirm a successful connection
