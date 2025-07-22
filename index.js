@@ -71,11 +71,45 @@ async function run() {
     app.post("/createDonation", async (req, res) => {
       try {
         const donationData = req.body;
-        const result = await  donationCollection.insertOne(donationData);
+        const result = await donationCollection.insertOne(donationData);
         res.send(result);
       } catch (error) {
         console.error("Error creating donation:", error);
         res.status(500).json({ message: "Failed to create donation" });
+      }
+    });
+
+    // GET /my-donations?email=user@example.com&page=0&limit=10
+    // In index.js or routes file
+    app.get("/myDonations", async (req, res) => {
+      try {
+        const { email, page = 0, limit = 5 } = req.query;
+
+        if (!email) {
+          return res.status(400).send({ message: "Email is required" });
+        }
+
+        const db = client.db("roktoSheba");
+        const donationCollection = db.collection("donations");
+
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+
+        const query = { requesterEmail: email };
+
+        const totalCount = await donationCollection.countDocuments(query);
+
+        const donations = await donationCollection
+          .find(query)
+          .sort({ createdAt: -1 }) // Newest first
+          .skip(pageNum * limitNum)
+          .limit(limitNum)
+          .toArray();
+
+        res.send({ totalCount, donations });
+      } catch (error) {
+        console.error("❌ Error in /myDonations:", error.message);
+        res.status(500).send({ message: "Internal Server Error" });
       }
     });
 
