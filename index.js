@@ -143,6 +143,44 @@ async function run() {
       }
     });
 
+    // all donation get
+    app.get("/allDonations", async (req, res) => {
+      try {
+        const { page = 0, limit = 10 } = req.query;
+        const skip = parseInt(page) * parseInt(limit);
+
+        const total = await donationCollection.countDocuments();
+
+        const donations = await donationCollection
+          .find({})
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(parseInt(limit))
+          .toArray();
+
+        res.send({ total, donations });
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch donation requests." });
+      }
+    });
+
+    //all donation request by id
+    app.patch("/donations/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        const result = await donationCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status } }
+        );
+
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to update status." });
+      }
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
