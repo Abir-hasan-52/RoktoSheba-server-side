@@ -32,6 +32,7 @@ async function run() {
     const db = client.db("roktoSheba");
     const usersCollection = db.collection("users");
     const donationCollection = db.collection("donations");
+    const blogsCollection = db.collection("blogs");
 
     // Register new user
     app.post("/users", async (req, res) => {
@@ -178,6 +179,124 @@ async function run() {
         res.send(result);
       } catch (err) {
         res.status(500).send({ message: "Failed to update status." });
+      }
+    });
+
+    // Create a new blog (status defaults to 'draft')
+    app.post("/blogs", async (req, res) => {
+      try {
+        const { title, thumbnail, content, authorEmail } = req.body;
+        if (!title || !thumbnail || !content || !authorEmail) {
+          return res.status(400).send({ message: "Missing required fields" });
+        }
+
+        const newBlog = {
+          title,
+          thumbnail,
+          content,
+          status: "draft",
+          authorEmail,
+          createdAt: new Date(),
+        };
+
+        const result = await blogsCollection.insertOne(newBlog);
+        res
+          .status(201)
+          .send({ message: "Blog created", blogId: result.insertedId });
+      } catch (error) {
+        console.error("Error creating blog:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
+    // Get blogs with optional filtering and pagination
+    app.get("/blogs", async (req, res) => {
+      try {
+        const { status, page = 0, limit = 10 } = req.query;
+        const query = {};
+
+        if (status && status !== "all") {
+          query.status = status;
+        }
+
+        const skip = parseInt(page) * parseInt(limit);
+        const totalCount = await blogsCollection.countDocuments(query);
+
+        const blogs = await blogsCollection
+          .find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(parseInt(limit))
+          .toArray();
+
+        res.send({ totalCount, blogs });
+      } catch (error) {
+        console.error("Error fetching blogs:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
+    // Update blog (status, title, thumbnail, content) - only admin allowed to update status
+    app.patch("/blogs/:id", async (req, res) => {
+      try {
+        const blogId = req.params.id;
+        const updateFields = req.body; // e.g., { status: 'published' } or { title: 'new title' }
+
+        if (!ObjectId.isValid(blogId)) {
+          return res.status(400).send({ message: "Invalid blog ID" });
+        }
+
+        const result = await blogsCollection.updateOne(
+          { _id: new ObjectId(blogId) },
+          { $set: updateFields }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: "Blog not found" });
+        }
+
+        res.send({ message: "Blog updated successfully" });
+      } catch (error) {
+        console.error("Error updating blog:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
+    // Delete a blog - only admin
+    app.delete("/blogs/:id", async (req, res) => {
+      try {
+        const blogId = req.params.id;
+
+        if (!ObjectId.isValid(blogId)) {
+          return res.status(400).send({ message: "Invalid blog ID" });
+        }
+
+        const result = await blogsCollection.deleteOne({
+          _id: new ObjectId(blogId),
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: "Blog not found" });
+        }
+
+        res.send({ message: "Blog deleted successfully" });
+      } catch (error) {
+        console.error("Error deleting blog:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
+    // GET: /published-blogs
+    app.get("/published-blogs", async (req, res) => {
+      try {
+        const publishedBlogs = await blogsCollection
+          .find({ status: "published" })
+          .sort({ createdAt: -1 }) // show latest first
+          .toArray();
+
+        res.send(publishedBlogs);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to load published blogs." });
       }
     });
 
