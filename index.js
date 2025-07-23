@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -62,6 +62,36 @@ async function run() {
         console.error("Error fetching user:", error);
         res.status(500).json({ message: "Internal Server Error" });
       }
+    });
+
+    // GET with pagination and status filter
+    app.get("/users", async (req, res) => {
+      const { page = 0, limit = 10, status } = req.query;
+      const query = status && status !== "all" ? { status } : {};
+      const cursor = usersCollection
+        .find(query)
+        .skip(Number(page) * Number(limit))
+        .limit(Number(limit));
+      const users = await cursor.toArray();
+      const totalCount = await usersCollection.countDocuments(query);
+      res.send({ users, totalCount });
+    });
+
+    // PATCH routes
+    // PATCH: Update any field (status, role)
+    app.patch("/users/:id", async (req, res) => {
+      const id = req.params.id;
+      const update = req.body;
+
+      if (!update || Object.keys(update).length === 0) {
+        return res.status(400).send({ error: "No update data provided." });
+      }
+
+      const result = await usersCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: update }
+      );
+      res.send(result);
     });
 
     // donation data store
