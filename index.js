@@ -300,6 +300,34 @@ async function run() {
       }
     });
 
+
+    app.get("/dashboard-stats", async (req, res) => {
+      try {
+        // 1. Total Donors (users with role = 'donor')
+        const totalDonors = await usersCollection.countDocuments({
+          role: "donor",
+        });
+
+        // 2. Total Funding (sum of all funding amount)
+        // const fundingDocs = await fundingCollection.find({}).toArray();
+        // const totalFunding = fundingDocs.reduce(
+        //   (acc, curr) => acc + (curr.amount || 0),
+        //   0
+        // );
+
+        // 3. Total Blood Donation Requests
+        const totalRequests = await donationCollection.countDocuments();
+
+        res.send({
+          totalDonors,
+        //   totalFunding,
+          totalRequests,
+        });
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch dashboard stats." });
+      }
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
