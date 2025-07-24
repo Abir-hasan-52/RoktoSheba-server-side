@@ -9,6 +9,8 @@ const port = process.env.PORT || 5000;
 // local environment variable from .env file
 dotenv.config();
 
+const stripe = require('stripe')(process.env.PAYMENT_GATEWAY_KEY);
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -33,6 +35,7 @@ async function run() {
     const usersCollection = db.collection("users");
     const donationCollection = db.collection("donations");
     const blogsCollection = db.collection("blogs");
+    const fundingCollection = db.collection("fundings");
 
     // Register new user
     app.post("/users", async (req, res) => {
@@ -300,6 +303,68 @@ async function run() {
       }
     });
 
+    //  funding
+
+    app.post("/create-payment-intent", async (req, res) => {
+      const amountInCents = req.body.amountInCents;
+      try {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amountInCents, // Amount in cents
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+
+        res.json({ clientSecret: paymentIntent.client_secret });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    //  post funding info
+    app.post("/fundings", async (req, res) => {
+      const fund = req.body;
+
+      // Basic validation
+      if (!fund.userId || !fund.amount) {
+        return res.status(400).send({ error: "Missing fields" });
+      }
+
+      fund.date = new Date();
+
+      try {
+        const result = await fundingCollection.insertOne(fund);
+        res.send(result);
+      } catch (err) {
+        console.error("Failed to add fund", err);
+        res.status(500).send({ error: "Internal server error" });
+      }
+    });
+
+    // get funding info in the table formate
+    app.get("/fundings", async (req, res) => {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+
+      const skip = (page - 1) * limit;
+
+      try {
+        const cursor = db
+          .collection("fundings")
+          .find()
+          .sort({ date: -1 })
+          .skip(skip)
+          .limit(limit);
+
+        const fundings = await cursor.toArray();
+        const total = await fundingCollection.countDocuments();
+
+        res.send({ fundings, total });
+      } catch (err) {
+        res.status(500).send({ error: "Failed to fetch funding data" });
+      }
+    });
+
+    // for home page 3 card feature api stats
 
     app.get("/dashboard-stats", async (req, res) => {
       try {
@@ -320,7 +385,7 @@ async function run() {
 
         res.send({
           totalDonors,
-        //   totalFunding,
+          //   totalFunding,
           totalRequests,
         });
       } catch (err) {
