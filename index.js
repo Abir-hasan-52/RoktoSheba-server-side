@@ -9,7 +9,7 @@ const port = process.env.PORT || 5000;
 // local environment variable from .env file
 dotenv.config();
 
-const stripe = require('stripe')(process.env.PAYMENT_GATEWAY_KEY);
+const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_KEY);
 
 // Middleware
 app.use(cors());
@@ -144,6 +144,20 @@ async function run() {
       } catch (error) {
         console.error("❌ Error in /myDonations:", error.message);
         res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
+    // delete donation request by id
+    app.delete("/myDonations/:id", async (req, res) => {
+      const id = req.params.id;
+
+      try {
+        const result = await donationCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Delete failed", error });
       }
     });
 
@@ -374,11 +388,11 @@ async function run() {
         });
 
         // 2. Total Funding (sum of all funding amount)
-        // const fundingDocs = await fundingCollection.find({}).toArray();
-        // const totalFunding = fundingDocs.reduce(
-        //   (acc, curr) => acc + (curr.amount || 0),
-        //   0
-        // );
+        const fundingDocs = await fundingCollection.find({}).toArray();
+        const totalFunding = fundingDocs.reduce(
+          (acc, curr) => acc + (curr.amount || 0),
+          0
+        );
 
         // 3. Total Blood Donation Requests
         const totalRequests = await donationCollection.countDocuments();
