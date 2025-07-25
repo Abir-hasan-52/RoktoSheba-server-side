@@ -184,6 +184,23 @@ async function run() {
       res.send(result);
     });
 
+    // Get all pending donation requests
+    app.get("/donation-requests", async (req, res) => {
+      const { status } = req.query;
+      const filter = status ? { status } : {};
+      const result = await donationCollection.find(filter).toArray();
+      res.send(result);
+    });
+
+    // Get single donation request by ID
+    app.get("/donation-requests/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await donationCollection.findOne({
+        _id: new ObjectId(id),
+      });
+      res.send(result);
+    });
+
     // GET /my-donations?email=user@example.com&page=0&limit=10
     // In index.js or routes file
     app.get("/myDonations", async (req, res) => {
