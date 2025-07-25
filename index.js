@@ -70,7 +70,7 @@ async function run() {
 
     app.patch("/users/:email", async (req, res) => {
       const email = req.params.email;
-      const updateData = req.body;  
+      const updateData = req.body;
 
       // কোনো অবাঞ্ছিত ফিল্ড update হওয়া থেকে বাঁচতে চাইলে নিচের মতো ফিল্টার করতে পারো
       const allowedFields = [
@@ -84,7 +84,7 @@ async function run() {
       allowedFields.forEach((field) => {
         if (updateData[field] !== undefined) {
           // যদি ডাটা থাকে, সেট করবে
-          
+
           if (field === "bloodGroup") {
             filteredUpdate["blood_group"] = updateData[field];
           } else {
@@ -168,6 +168,20 @@ async function run() {
         console.error("Error creating donation:", error);
         res.status(500).json({ message: "Failed to create donation" });
       }
+    });
+
+    // Example with Express + MongoDB
+    app.get("/donors", async (req, res) => {
+      const { bloodGroup, district, upazila } = req.query;
+      const result = await usersCollection
+        .find({
+          role: "donor",
+          blood_group: bloodGroup,
+          district: district,
+          upazila: upazila,
+        })
+        .toArray();
+      res.send(result);
     });
 
     // GET /my-donations?email=user@example.com&page=0&limit=10
