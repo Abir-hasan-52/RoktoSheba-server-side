@@ -161,6 +161,78 @@ async function run() {
       }
     });
 
+    //get donation request by id to view
+    app.get("/myDonations/:id", async (req, res) => {
+      const id = req.params.id;
+
+      try {
+        const donation = await donationCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        res.send(donation);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch donation", error });
+      }
+    });
+
+    // // GET /donation-requests/:id
+    app.get("/myDonations/:id", async (req, res) => {
+      const { id } = req.params;
+      const result = await donationCollection.findOne({
+        _id: new ObjectId(id),
+      });
+      res.send(result);
+    });
+
+    // PATCH /donation-requests/:id
+    app.patch("/myDonations/:id", async (req, res) => {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      // 🛑 Remove `_id` if present in updateData
+      delete updateData._id;
+
+      try {
+        const result = await donationCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updateData }
+        );
+
+        res.send(result);
+      } catch (error) {
+        console.error("Update error:", error);
+        res.status(500).send({ error: "Update failed" });
+      }
+    });
+
+    // PATCH: /donation-requests/:id
+    // body: { status: "done" or "canceled" }
+    app.patch("/myDonations/:id", async (req, res) => {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const result = await donationCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: status } }
+      );
+
+      res.send(result);
+    });
+
+    //to view 
+    app.get("/donation-requests/:id", async (req, res) => {
+      const id = req.params.id;
+
+      try {
+        const donation = await donationCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        res.send(donation);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch donation", error });
+      }
+    });
+
     // all donation get
     app.get("/allDonations", async (req, res) => {
       try {
