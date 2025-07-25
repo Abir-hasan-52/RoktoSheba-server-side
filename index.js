@@ -68,6 +68,63 @@ async function run() {
       }
     });
 
+    app.patch("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const updateData = req.body;  
+
+      // কোনো অবাঞ্ছিত ফিল্ড update হওয়া থেকে বাঁচতে চাইলে নিচের মতো ফিল্টার করতে পারো
+      const allowedFields = [
+        "name",
+        "avatar",
+        "bloodGroup",
+        "district",
+        "upazila",
+      ];
+      const filteredUpdate = {};
+      allowedFields.forEach((field) => {
+        if (updateData[field] !== undefined) {
+          // যদি ডাটা থাকে, সেট করবে
+          
+          if (field === "bloodGroup") {
+            filteredUpdate["blood_group"] = updateData[field];
+          } else {
+            filteredUpdate[field] = updateData[field];
+          }
+        }
+      });
+
+      try {
+        const result = await usersCollection.updateOne(
+          { email },
+          { $set: filteredUpdate }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        res.json({ message: "Profile updated" });
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Internal Server Error" });
+      }
+    });
+
+    // ✅ GET user role API
+    app.get("/users/:email/role", async (req, res) => {
+      const email = req.params.email;
+      try {
+        const user = await usersCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).json({ error: "User not found" });
+        }
+        res.json({ role: user.role || "user" });
+      } catch (error) {
+        console.error("Error fetching user role:", error);
+        res.status(500).json({ error: "Internal server error" });
+      }
+    });
+
     // GET with pagination and status filter
     app.get("/users", async (req, res) => {
       const { page = 0, limit = 10, status } = req.query;
@@ -219,7 +276,7 @@ async function run() {
       res.send(result);
     });
 
-    //to view 
+    //to view
     app.get("/donation-requests/:id", async (req, res) => {
       const id = req.params.id;
 
