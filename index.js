@@ -37,6 +37,7 @@ async function run() {
     const blogsCollection = db.collection("blogs");
     const fundingCollection = db.collection("fundings");
     const assignedDonorCollection = db.collection("assignDonor");
+    const contactsCollection = db.collection("contactInfo");
 
     // Register new user
     app.post("/users", async (req, res) => {
@@ -384,114 +385,110 @@ async function run() {
 
     // Assuming you have already set up express, mongodb client, and middleware
 
-   app.patch("/donation/assign-donor/:donationId", async (req, res) => {
-  try {
-    const { donorEmail } = req.body;
-    const { donationId } = req.params;
+    app.patch("/donation/assign-donor/:donationId", async (req, res) => {
+      try {
+        const { donorEmail } = req.body;
+        const { donationId } = req.params;
 
-    const db = client.db("roktoSheba");
-    const donations = db.collection("donations");
-    const users = db.collection("users");
-    const assignedDonorCollection = db.collection("assignedDonor");
+        // 🔍 Donor Info
+        const donor = await users.findOne({
+          email: donorEmail,
+          role: "donor",
+          status: "active",
+        });
 
-    // 🔍 Donor Info
-    const donor = await users.findOne({
-      email: donorEmail,
-      role: "donor",
-      status: "active",
-    });
+        if (!donor) {
+          return res
+            .status(404)
+            .json({ message: "Donor not found or inactive." });
+        }
 
-    if (!donor) {
-      return res.status(404).json({ message: "Donor not found or inactive." });
-    }
+        // 🛠️ Update donation with assigned donor info
+        const updateDonation = await donations.updateOne(
+          { _id: new ObjectId(donationId) },
+          {
+            $set: {
+              assignedDonor: {
+                email: donor.email,
+                name: donor.name,
+                bloodGroup: donor.blood_group,
+                phone: donor.phone,
+                avatar: donor.avatar,
+                district: donor.district,
+                upazila: donor.upazila,
+              },
+              donorEmail: donor.email, // For easier lookup
+              status: "inprogress",
+            },
+          }
+        );
 
-    // 🛠️ Update donation with assigned donor info
-    const updateDonation = await donations.updateOne(
-      { _id: new ObjectId(donationId) },
-      {
-        $set: {
-          assignedDonor: {
-            email: donor.email,
-            name: donor.name,
-            bloodGroup: donor.blood_group,
-            phone: donor.phone,
-            avatar: donor.avatar,
-            district: donor.district,
-            upazila: donor.upazila,
-          },
-          donorEmail: donor.email, // For easier lookup
-          status: "inprogress",
-        },
+        // ✅ Also save in assignedDonor collection
+        const newAssign = {
+          donationId: new ObjectId(donationId),
+          donorId: donor._id,
+          donorEmail: donor.email,
+          donorName: donor.name,
+          bloodGroup: donor.blood_group,
+          district: donor.district,
+          upazila: donor.upazila,
+          avatar: donor.avatar,
+          assignedAt: new Date(),
+        };
+
+        await assignedDonorCollection.insertOne(newAssign);
+
+        res.send({ message: "Donor assigned successfully." });
+      } catch (error) {
+        console.error("Assign donor error:", error);
+        res.status(500).json({ message: "Internal Server Error" });
       }
-    );
-
-    // ✅ Also save in assignedDonor collection
-    const newAssign = {
-      donationId: new ObjectId(donationId),
-      donorId: donor._id,
-      donorEmail: donor.email,
-      donorName: donor.name,
-      bloodGroup: donor.blood_group,
-      district: donor.district,
-      upazila: donor.upazila,
-      avatar: donor.avatar,
-      assignedAt: new Date(),
-    };
-
-    await assignedDonorCollection.insertOne(newAssign);
-
-    res.send({ message: "Donor assigned successfully." });
-  } catch (error) {
-    console.error("Assign donor error:", error);
-    res.status(500).json({ message: "Internal Server Error" });
-  }
-});
+    });
 
     // view donor info
 
-   app.get("/users/donor/:email", async (req, res) => {
-  try {
-    const email = req.params.email;
-    if (!email) {
-      return res.status(400).json({ message: "Email is required" });
-    }
+    app.get("/users/donor/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        if (!email) {
+          return res.status(400).json({ message: "Email is required" });
+        }
 
-    const db = client.db("roktoSheba");
-    const usersCollection = db.collection("users");
+        const db = client.db("roktoSheba");
+        const usersCollection = db.collection("users");
 
-    const donor = await usersCollection.findOne({
-      email,
-      role: "donor", // ensure only donor role users
-      status: "active",
+        const donor = await usersCollection.findOne({
+          email,
+          role: "donor", // ensure only donor role users
+          status: "active",
+        });
+
+        if (!donor) {
+          return res.status(404).json({ message: "Donor not found" });
+        }
+
+        const {
+          name,
+          email: donorEmail,
+          blood_group,
+          district,
+          upazila,
+          avatar,
+        } = donor;
+
+        res.json({
+          name,
+          email: donorEmail,
+          blood_group,
+          district,
+          upazila,
+          avatar,
+        });
+      } catch (error) {
+        console.error("Error fetching donor info:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+      }
     });
-
-    if (!donor) {
-      return res.status(404).json({ message: "Donor not found" });
-    }
-
-    const {
-      name,
-      email: donorEmail,
-      blood_group,
-      district,
-      upazila,
-      avatar,
-    } = donor;
-
-    res.json({
-      name,
-      email: donorEmail,
-      blood_group,
-      district,
-      upazila,
-      avatar,
-    });
-  } catch (error) {
-    console.error("Error fetching donor info:", error);
-    res.status(500).json({ message: "Internal Server Error" });
-  }
-});
-
 
     // active donor get
     // server.js বা যেখানেই তোমার express app setup করো সেখানে
@@ -757,6 +754,33 @@ async function run() {
         });
       } catch (err) {
         res.status(500).send({ message: "Failed to fetch dashboard stats." });
+      }
+    });
+
+    // POST /api/contact-us
+    app.post("/contact-us", async (req, res) => {
+      try {
+        const { name, email, telephone, message } = req.body;
+
+        const newContact = {
+          name,
+          email,
+          telephone: telephone || "",
+
+          message,
+          createdAt: new Date(),
+        };
+
+        const result = await contactsCollection.insertOne(newContact);
+
+        return res
+          .status(201)
+          .json({ message: "Contact information saved successfully." });
+      } catch (error) {
+        console.error("Error inserting contact:", error);
+        return res
+          .status(500)
+          .json({ message: "Server error, please try again later." });
       }
     });
 
