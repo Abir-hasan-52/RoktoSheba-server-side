@@ -36,6 +36,7 @@ async function run() {
     const donationCollection = db.collection("donations");
     const blogsCollection = db.collection("blogs");
     const fundingCollection = db.collection("fundings");
+    const assignedDonorCollection = db.collection("assignDonor");
 
     // Register new user
     app.post("/users", async (req, res) => {
@@ -140,6 +141,26 @@ async function run() {
       const totalCount = await usersCollection.countDocuments(query);
 
       res.send({ users, totalCount });
+    });
+    // active donors
+
+    app.get("/allUsers/active-donors", async (req, res) => {
+      try {
+        const db = client.db("roktoSheba");
+        const usersCollection = db.collection("users");
+
+        const query = {
+          role: "donor",
+          status: "active",
+        };
+
+        const activeDonors = await usersCollection.find(query).toArray();
+
+        res.send(activeDonors);
+      } catch (error) {
+        console.error("❌ Error fetching active donors:", error.message);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
     });
 
     // PATCH routes
@@ -329,6 +350,169 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch donation", error });
       }
     });
+    // get all notation and also pagination
+    app.get("/all-donations", async (req, res) => {
+      try {
+        const { page = 0, limit = 5, status } = req.query;
+
+        const db = client.db("roktoSheba");
+        const donationCollection = db.collection("donations");
+
+        // Build the query object
+        const query = status ? { status: status } : {};
+
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+
+        const totalCount = await donationCollection.countDocuments(query);
+
+        const donations = await donationCollection
+          .find(query)
+          .sort({ createdAt: -1 }) // Latest first
+          .skip(pageNum * limitNum)
+          .limit(limitNum)
+          .toArray();
+
+        res.send({ totalCount, donations });
+      } catch (error) {
+        console.error("❌ Error in /all-donations:", error.message);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
+    //  Route: PATCH /donation/assign-donor/:id
+
+    // Assuming you have already set up express, mongodb client, and middleware
+
+   app.patch("/donation/assign-donor/:donationId", async (req, res) => {
+  try {
+    const { donorEmail } = req.body;
+    const { donationId } = req.params;
+
+    const db = client.db("roktoSheba");
+    const donations = db.collection("donations");
+    const users = db.collection("users");
+    const assignedDonorCollection = db.collection("assignedDonor");
+
+    // 🔍 Donor Info
+    const donor = await users.findOne({
+      email: donorEmail,
+      role: "donor",
+      status: "active",
+    });
+
+    if (!donor) {
+      return res.status(404).json({ message: "Donor not found or inactive." });
+    }
+
+    // 🛠️ Update donation with assigned donor info
+    const updateDonation = await donations.updateOne(
+      { _id: new ObjectId(donationId) },
+      {
+        $set: {
+          assignedDonor: {
+            email: donor.email,
+            name: donor.name,
+            bloodGroup: donor.blood_group,
+            phone: donor.phone,
+            avatar: donor.avatar,
+            district: donor.district,
+            upazila: donor.upazila,
+          },
+          donorEmail: donor.email, // For easier lookup
+          status: "inprogress",
+        },
+      }
+    );
+
+    // ✅ Also save in assignedDonor collection
+    const newAssign = {
+      donationId: new ObjectId(donationId),
+      donorId: donor._id,
+      donorEmail: donor.email,
+      donorName: donor.name,
+      bloodGroup: donor.blood_group,
+      district: donor.district,
+      upazila: donor.upazila,
+      avatar: donor.avatar,
+      assignedAt: new Date(),
+    };
+
+    await assignedDonorCollection.insertOne(newAssign);
+
+    res.send({ message: "Donor assigned successfully." });
+  } catch (error) {
+    console.error("Assign donor error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+    // view donor info
+
+   app.get("/users/donor/:email", async (req, res) => {
+  try {
+    const email = req.params.email;
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const db = client.db("roktoSheba");
+    const usersCollection = db.collection("users");
+
+    const donor = await usersCollection.findOne({
+      email,
+      role: "donor", // ensure only donor role users
+      status: "active",
+    });
+
+    if (!donor) {
+      return res.status(404).json({ message: "Donor not found" });
+    }
+
+    const {
+      name,
+      email: donorEmail,
+      blood_group,
+      district,
+      upazila,
+      avatar,
+    } = donor;
+
+    res.json({
+      name,
+      email: donorEmail,
+      blood_group,
+      district,
+      upazila,
+      avatar,
+    });
+  } catch (error) {
+    console.error("Error fetching donor info:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+
+    // active donor get
+    // server.js বা যেখানেই তোমার express app setup করো সেখানে
+    // app.get("/users/active-donors", async (req, res) => {
+    //   try {
+    //     // const db = client.db("roktoSheba");
+    //     // const usersCollection = db.collection("users");
+
+    //     const query = {
+    //       role: "donor",
+    //       status: "active",
+    //     };
+
+    //     const activeDonors = await usersCollection.find(query).toArray();
+
+    //     res.send(activeDonors);
+    //   } catch (error) {
+    //     console.error("❌ Error fetching active donors:", error.message);
+    //     res.status(500).send({ message: "Internal Server Error" });
+    //   }
+    // });
 
     // all donation get
     app.get("/allDonations", async (req, res) => {
