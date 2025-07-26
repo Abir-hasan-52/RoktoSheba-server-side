@@ -126,21 +126,25 @@ async function run() {
     });
 
     // GET with pagination and status filter
-    app.get("/users", async (req, res) => {
+    app.get("/allUsers", async (req, res) => {
       const { page = 0, limit = 10, status } = req.query;
       const query = status && status !== "all" ? { status } : {};
+
       const cursor = usersCollection
         .find(query)
+        .sort({ created_at: -1 }) // <-- নতুন থেকে পুরাতন ক্রমে সাজানো হচ্ছে
         .skip(Number(page) * Number(limit))
         .limit(Number(limit));
+
       const users = await cursor.toArray();
       const totalCount = await usersCollection.countDocuments(query);
+
       res.send({ users, totalCount });
     });
 
     // PATCH routes
     // PATCH: Update any field (status, role)
-    app.patch("/users/:id", async (req, res) => {
+    app.patch("/allUsers/:id", async (req, res) => {
       const id = req.params.id;
       const update = req.body;
 
@@ -202,10 +206,10 @@ async function run() {
     });
 
     // GET /my-donations?email=user@example.com&page=0&limit=10
-    // In index.js or routes file
+    // GET: Fetch My Donation Requests with pagination and status filtering
     app.get("/myDonations", async (req, res) => {
       try {
-        const { email, page = 0, limit = 5 } = req.query;
+        const { email, status, page = 0, limit = 5 } = req.query;
 
         if (!email) {
           return res.status(400).send({ message: "Email is required" });
@@ -218,6 +222,11 @@ async function run() {
         const limitNum = parseInt(limit);
 
         const query = { requesterEmail: email };
+
+        // ✅ Add status filter if provided and not 'all'
+        if (status && status !== "all") {
+          query.status = status;
+        }
 
         const totalCount = await donationCollection.countDocuments(query);
 
