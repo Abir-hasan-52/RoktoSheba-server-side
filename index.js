@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
+const admin = require("firebase-admin");
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -14,6 +14,12 @@ const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_KEY);
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+const serviceAccount = require("./roktosheba-firebase-adminsdk.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.kxazpdy.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -38,6 +44,28 @@ async function run() {
     const fundingCollection = db.collection("fundings");
     const assignedDonorCollection = db.collection("assignDonor");
     const contactsCollection = db.collection("contactInfo");
+
+    // custom middleware
+
+    const verifyFBToken = async (req, res, next) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+      const token = authHeader.split(" ")[1];
+      if (!token) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+      //  verify the token
+
+      try {
+        const decoded = await admin.auth().verifyIdToken(token);
+        req.decoded = decoded;
+        next();
+      } catch (error) {
+        return res.status(403).send({ message: " forbidden access" });
+      }
+    };
 
     // Register new user
     app.post("/users", async (req, res) => {
@@ -128,7 +156,7 @@ async function run() {
     });
 
     // GET with pagination and status filter
-    app.get("/allUsers", async (req, res) => {
+    app.get("/allUsers", verifyFBToken, async (req, res) => {
       const { page = 0, limit = 10, status } = req.query;
       const query = status && status !== "all" ? { status } : {};
 
@@ -296,9 +324,9 @@ async function run() {
 
     // // Route: Get 3 random donors
     app.get("/random-donors", async (req, res) => {
-         const users = db.collection("users");
-        const donations = db.collection("donations");
-        const assignedDonorCollection = db.collection("assignedDonors");
+      const users = db.collection("users");
+      const donations = db.collection("donations");
+      const assignedDonorCollection = db.collection("assignedDonors");
       try {
         console.log("Fetching random donors...");
         const donors = await assignedDonorCollection
