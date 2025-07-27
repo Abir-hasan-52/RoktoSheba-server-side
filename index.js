@@ -67,6 +67,21 @@ async function run() {
       }
     };
 
+    // verify admin and volunteer
+
+    const verifyRole = (...allowedRoles) => {
+      return async (req, res, next) => {
+        const email = req.decoded.email;
+        const user = await usersCollection.findOne({ email });
+
+        if (!user || !allowedRoles.includes(user.role)) {
+          return res.status(403).send({ message: "forbidden access" });
+        }
+
+        next();
+      };
+    };
+
     // Register new user
     app.post("/users", async (req, res) => {
       const email = req.body.email;
@@ -156,7 +171,7 @@ async function run() {
     });
 
     // GET with pagination and status filter
-    app.get("/allUsers", verifyFBToken, async (req, res) => {
+    app.get("/allUsers", verifyFBToken, verifyRole('admin', 'volunteer'),async (req, res) => {
       const { page = 0, limit = 10, status } = req.query;
       const query = status && status !== "all" ? { status } : {};
 
@@ -257,7 +272,7 @@ async function run() {
 
     // GET /my-donations?email=user@example.com&page=0&limit=10
     // GET: Fetch My Donation Requests with pagination and status filtering
-    app.get("/myDonations", async (req, res) => {
+    app.get("/myDonations", verifyFBToken, async (req, res) => {
       try {
         const { email, status, page = 0, limit = 5 } = req.query;
 
@@ -398,35 +413,40 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch donation", error });
       }
     });
-    // get all notation and also pagination
-    app.get("/all-donations", async (req, res) => {
-      try {
-        const { page = 0, limit = 5, status } = req.query;
+    // get all donations and also pagination
+    app.get(
+      "/all-donations",
+      verifyFBToken,
+      verifyRole("admin", "volunteer"),
+      async (req, res) => {
+        try {
+          const { page = 0, limit = 5, status } = req.query;
 
-        const db = client.db("roktoSheba");
-        const donationCollection = db.collection("donations");
+          const db = client.db("roktoSheba");
+          const donationCollection = db.collection("donations");
 
-        // Build the query object
-        const query = status ? { status: status } : {};
+          // Build the query object
+          const query = status ? { status: status } : {};
 
-        const pageNum = parseInt(page);
-        const limitNum = parseInt(limit);
+          const pageNum = parseInt(page);
+          const limitNum = parseInt(limit);
 
-        const totalCount = await donationCollection.countDocuments(query);
+          const totalCount = await donationCollection.countDocuments(query);
 
-        const donations = await donationCollection
-          .find(query)
-          .sort({ createdAt: -1 }) // Latest first
-          .skip(pageNum * limitNum)
-          .limit(limitNum)
-          .toArray();
+          const donations = await donationCollection
+            .find(query)
+            .sort({ createdAt: -1 }) // Latest first
+            .skip(pageNum * limitNum)
+            .limit(limitNum)
+            .toArray();
 
-        res.send({ totalCount, donations });
-      } catch (error) {
-        console.error("❌ Error in /all-donations:", error.message);
-        res.status(500).send({ message: "Internal Server Error" });
+          res.send({ totalCount, donations });
+        } catch (error) {
+          console.error("❌ Error in /all-donations:", error.message);
+          res.status(500).send({ message: "Internal Server Error" });
+        }
       }
-    });
+    );
 
     //  Route: PATCH /donation/assign-donor/:id
 
@@ -627,31 +647,36 @@ async function run() {
     });
 
     // Get blogs with optional filtering and pagination
-    app.get("/blogs", async (req, res) => {
-      try {
-        const { status, page = 0, limit = 10 } = req.query;
-        const query = {};
+    app.get(
+      "/blogs",
+      verifyFBToken,
+      verifyRole("admin", "volunteer"),
+      async (req, res) => {
+        try {
+          const { status, page = 0, limit = 10 } = req.query;
+          const query = {};
 
-        if (status && status !== "all") {
-          query.status = status;
+          if (status && status !== "all") {
+            query.status = status;
+          }
+
+          const skip = parseInt(page) * parseInt(limit);
+          const totalCount = await blogsCollection.countDocuments(query);
+
+          const blogs = await blogsCollection
+            .find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit))
+            .toArray();
+
+          res.send({ totalCount, blogs });
+        } catch (error) {
+          console.error("Error fetching blogs:", error);
+          res.status(500).send({ message: "Internal server error" });
         }
-
-        const skip = parseInt(page) * parseInt(limit);
-        const totalCount = await blogsCollection.countDocuments(query);
-
-        const blogs = await blogsCollection
-          .find(query)
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(parseInt(limit))
-          .toArray();
-
-        res.send({ totalCount, blogs });
-      } catch (error) {
-        console.error("Error fetching blogs:", error);
-        res.status(500).send({ message: "Internal server error" });
       }
-    });
+    );
 
     // Update blog (status, title, thumbnail, content) - only admin allowed to update status
     app.patch("/blogs/:id", async (req, res) => {
