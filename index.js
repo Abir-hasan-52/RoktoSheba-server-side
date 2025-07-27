@@ -294,6 +294,25 @@ async function run() {
       }
     });
 
+    // // Route: Get 3 random donors
+    app.get("/random-donors", async (req, res) => {
+         const users = db.collection("users");
+        const donations = db.collection("donations");
+        const assignedDonorCollection = db.collection("assignedDonors");
+      try {
+        console.log("Fetching random donors...");
+        const donors = await assignedDonorCollection
+          .aggregate([{ $sample: { size: 3 } }])
+          .toArray();
+        console.log("Donors fetched:", donors);
+
+        res.json(donors);
+      } catch (error) {
+        console.error("Error getting random donors:", error);
+        res.status(500).json({ message: "Server Error" });
+      }
+    });
+
     // // GET /donation-requests/:id
     app.get("/myDonations/:id", async (req, res) => {
       const { id } = req.params;
@@ -389,6 +408,9 @@ async function run() {
       try {
         const { donorEmail } = req.body;
         const { donationId } = req.params;
+        const users = db.collection("users");
+        const donations = db.collection("donations");
+        const assignedDonorCollection = db.collection("assignedDonors");
 
         // 🔍 Donor Info
         const donor = await users.findOne({
