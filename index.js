@@ -750,6 +750,29 @@ async function run() {
       }
     });
 
+    //  get single blog by id
+    app.get("/blogs/:id", async (req, res) => {
+      const blogId = req.params.id;
+
+      if (!ObjectId.isValid(blogId)) {
+        return res.status(400).send({ message: "Invalid blog ID" });
+      }
+
+      try {
+        const blog = await blogsCollection.findOne({
+          _id: new ObjectId(blogId),
+        });
+
+        if (!blog) {
+          return res.status(404).send({ message: "Blog not found" });
+        }
+
+        res.send(blog);
+      } catch (error) {
+        console.error("Error fetching blog:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
     //  funding
 
     app.post("/create-payment-intent", async (req, res) => {
